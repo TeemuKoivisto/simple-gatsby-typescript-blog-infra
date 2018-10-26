@@ -1,0 +1,129 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: Stack for KSML-Tulospalvelu public endpoints
+
+Parameters:
+  Project:
+    Description: Name of the project
+    Type: String
+  Environment:
+    Description: Environment where the stack is launched
+    Type: String
+    AllowedValues:
+      - staging
+      - production
+  DNSStackName:
+      Description: Name of the stack that defindes Route53
+      Type: String
+      Default: tulospalvelu-dns
+  CertArn:
+      Description: Certificate arn for cloudfront distribution (needs to be issued in us-east-1 region)
+      Type: String
+      Default: arn:aws:acm:us-east-1:479185986661:certificate/454417e6-408c-4171-8205-b8db92d7ba8a
+  EdgeLambdaArn:
+      Description: Arn of the edge lamba that runs in us-east-1. This does url rewrites to SPA
+      Type: String
+      Default: arn:aws:lambda:us-east-1:479185986661:function:tulospalvelu-edge-lambda-dev-SPAEdgeLambda-1B3E5X8OUEOPB
+  EdgeLambdaVersion:
+      Description: Version of the edge lambda that does url rewrites to SPA
+      Type: Number
+      Default: 3
+
+Resources:
+  Distribution:
+    Type: "AWS::CloudFront::Distribution"
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        Comment: !Sub Tulospalvelu ${Environment} distribuution
+        PriceClass: PriceClass_100
+        ViewerCertificate:
+          AcmCertificateArn: !Ref CertArn
+          SslSupportMethod: sni-only
+        Origins:
+          - Id: TulospalveluAPI
+            DomainName:
+              Fn::ImportValue:
+                !Sub tulospaplvelu-app-server-${Environment}-ALB-Url
+            CustomOriginConfig:
+              OriginProtocolPolicy: http-only
+
+          - Id: TulospalveluStatic
+            DomainName: !Sub ksml-tulospalvelu-public-${Environment}.s3-website-eu-west-1.amazonaws.com
+            OriginPath: /build
+            CustomOriginConfig:
+              OriginProtocolPolicy: http-only
+
+          - Id: TulospalveluImages
+            DomainName: !Sub ksml-tulospalvelu-public-${Environment}.s3.amazonaws.com
+            OriginPath: /images
+            CustomOriginConfig:
+              OriginProtocolPolicy: http-only
+
+        Aliases:
+          - !Sub ${Environment}.tulospalvelu.media.fi
+        DefaultCacheBehavior:
+            TargetOriginId: TulospalveluStatic
+            AllowedMethods:
+              - GET
+              - HEAD
+              - OPTIONS
+            ForwardedValues:
+              QueryString: false
+              Cookies:
+                Forward: none
+            Compress: true
+            ViewerProtocolPolicy: allow-all
+            DefaultTTL: 120
+            LambdaFunctionAssociations:
+              - EventType: 'origin-request'
+                LambdaFunctionARN: !Join
+                  - ':'
+                  - - !Ref EdgeLambdaArn
+                    - !Ref EdgeLambdaVersion
+                    - !Ref 'AWS::NoValue'
+        CacheBehaviors:
+          - PathPattern: /api/*
+            TargetOriginId: TulospalveluAPI
+            AllowedMethods:
+              - DELETE
+              - GET
+              - HEAD
+              - OPTIONS
+              - PATCH
+              - POST
+              - PUT
+            Compress: true
+            DefaultTTL: 120
+            ViewerProtocolPolicy: redirect-to-https
+            ForwardedValues:
+              Headers:
+                - Authorization
+                - Accept
+                - Host
+              QueryString: true
+              Cookies:
+               Forward: none
+          - PathPattern: /images/*
+            TargetOriginId: TulospalveluImages
+            AllowedMethods:
+              - GET
+              - HEAD
+            ForwardedValues:
+              QueryString: false
+              Cookies:
+                Forward: none
+            Compress: true
+            ViewerProtocolPolicy: allow-all
+            DefaultTTL: 120
+  PublicDNS:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneId:
+        Fn::ImportValue:
+          !Sub ${DNSStackName}-HostedZone-Id
+      Comment: !Sub Tulospalvelu ${Environment} public url
+      Name: !Join [".", [!Ref Environment,tulospalvelu.media.fi]]
+      Type: CNAME
+      TTL: 300
+      ResourceRecords:
+        - !GetAtt Distribution.DomainName

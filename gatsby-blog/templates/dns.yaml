@@ -1,0 +1,39 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: Hosted zone for public DNS for Tulospalvelu
+
+Parameters:
+  Project:
+    Description: Name of the project
+    Type: String
+  Environment:
+    Description: Environment where the stack is launched
+    Type: String
+    AllowedValues:
+      - staging
+      - production
+  Domain:
+    Description: Domain name of the Hosted Zone eg. app.teemukoivisto.xyz
+    Type: String
+
+Resources:
+  WebsiteHostedZone:
+    Type: AWS::Route53::HostedZone
+    DeletionPolicy: Retain
+    Properties:
+      Name: !Ref Domain
+      HostedZoneConfig:
+        Comment: The HostedZone for the website
+Outputs:
+  HostedZoneId:
+    Description: The website's HostedZone's id
+    Value: !Ref WebsiteHostedZone
+    Export:
+      Name: !Sub ${AWS::StackName}-HostedZone-Id
+  NameServers:
+    Value: !Join [",", !GetAtt WebsiteHostedZone.NameServers]
+    Export:
+      Name: !Sub ${AWS::StackName}-NameServers
+  DomainName:
+    Value: !Ref Domain
+    Export:
+      Name: !Sub ${AWS::StackName}-Domain

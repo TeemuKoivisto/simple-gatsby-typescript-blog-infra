@@ -1,0 +1,83 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: Edge lambda that will reroute requests outside the domain back to it (as it will produce 403 otherwise)
+
+Parameters:
+  Project:
+    Description: Name of the project
+    Type: String
+  Environment:
+    Description: Environment where the stack is launched
+    Type: String
+    AllowedValues:
+      - staging
+      - production
+
+Resources:
+  SPAEdgeLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      Handler: 'index.handler'
+      Role:
+        Fn::GetAtt:
+          - 'SPAEdgeLambdaRole'
+          - 'Arn'
+      Code:
+        ZipFile: |
+          'use strict';
+          const path = require('path');
+          exports.handler = (evt, context, callback) => {
+              const { request } = evt.Records[0].cf
+                  if (!path.extname(request.uri)) {
+                    console.log('Rewrite URI [' + request.uri + '] to [/index.html]');
+                    request.uri = '/index.html';
+                  }
+              callback(null, request);
+          };
+      Runtime: 'nodejs8.10'
+      Timeout: '25'
+      TracingConfig:
+        Mode: 'Active'
+
+  SPAEdgeLambdaVersion3:
+    Type: AWS::Lambda::Version
+    Properties:
+      FunctionName:
+        Ref: 'SPAEdgeLambda'
+  SPAEdgeLambdaRole:
+      Type: AWS::IAM::Role
+      Properties:
+        AssumeRolePolicyDocument:
+          Version: 2012-10-17
+          Statement:
+            - Action: 'sts:AssumeRole'
+              Principal:
+                Service:
+                  - lambda.amazonaws.com
+                  - edgelambda.amazonaws.com
+                  - replicator.lambda.amazonaws.com
+              Effect: Allow
+        Policies:
+          - PolicyName: EdgePoliciesLambdaPolicy
+            PolicyDocument:
+              Version: 2012-10-17
+              Statement:
+                - Action:
+                    - 'lambda:GetFunction'
+                    - 'lambda:EnableReplication*'
+                    - 'lambda:InvokeFunction'
+                    - 'logs:CreateLogGroup'
+                    - 'logs:CreateLogStream'
+                    - 'logs:PutLogEvents'
+                  Effect: Allow
+                  Resource: '*'
+Outputs:
+  LambdaArn:
+    Description: Arn of the edge lambda
+    Value: !GetAtt SPAEdgeLambda.Arn
+    Export:
+      Name: !Sub ${AWS::StackName}-Lambda-Arn
+  LambdaVersion:
+    Description: Version of edge lambda
+    Value: !GetAtt SPAEdgeLambdaVersion3.Version
+    Export:
+      Name: !Sub ${AWS::StackName}-Lambda-Version
