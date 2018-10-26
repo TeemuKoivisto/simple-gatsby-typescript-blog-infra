@@ -52,6 +52,9 @@ At least:
 
 Don't use `.yml`-files, always `.yaml`. Sceptre won't read those.
 
+* `sceptre launch-env staging`
+* `sceptre launch-stack staging dns`
+
 ## CloudFormation gotchas
 
 * `Ref` is for variable only: `Name: !Ref Domain`

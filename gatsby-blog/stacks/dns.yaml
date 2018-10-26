@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: 2010-09-09
-Description: Hosted zone for public DNS for Tulospalvelu
+Description: The HostedZone for this website
 
 Parameters:
   Project:
@@ -12,7 +12,7 @@ Parameters:
       - staging
       - production
   Domain:
-    Description: Domain name of the Hosted Zone eg. app.teemukoivisto.xyz
+    Description: Domain name of the HostedZone eg. app.teemukoivisto.xyz
     Type: String
 
 Resources:
@@ -22,7 +22,7 @@ Resources:
     Properties:
       Name: !Ref Domain
       HostedZoneConfig:
-        Comment: The HostedZone for the website
+        Comment: The HostedZone for this website
 Outputs:
   HostedZoneId:
     Description: The website's HostedZone's id

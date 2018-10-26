@@ -1,4 +1,4 @@
-template_path: templates/dns.yaml
+template_path: stacks/dns.yaml
 parameters:
   Environment: {{ environment_path.0 }}
   Project: {{ environment_config.project_code }}

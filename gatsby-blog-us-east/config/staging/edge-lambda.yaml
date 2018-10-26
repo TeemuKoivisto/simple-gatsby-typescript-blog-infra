@@ -1,4 +1,4 @@
-template_path: templates/edge-lambda.yaml
+template_path: stacks/edge-lambda.yaml
 parameters:
   Environment: {{ environment_path.0 }}
   Project: {{ environment_config.project_code }}

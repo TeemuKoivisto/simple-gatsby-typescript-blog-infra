@@ -62,6 +62,8 @@ Resources:
               Version: 2012-10-17
               Statement:
                 - Action:
+                    - 'xray:PutTraceSegments'
+                    - 'xray:PutTelemetryRecords'
                     - 'lambda:GetFunction'
                     - 'lambda:EnableReplication*'
                     - 'lambda:InvokeFunction'
@@ -77,7 +79,7 @@ Outputs:
     Export:
       Name: !Sub ${AWS::StackName}-Lambda-Arn
   LambdaVersion:
-    Description: Version of edge lambda
+    Description: Version of the edge lambda
     Value: !GetAtt SPAEdgeLambdaVersion3.Version
     Export:
       Name: !Sub ${AWS::StackName}-Lambda-Version
