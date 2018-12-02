@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: 2010-09-09
-Description: Edge lambda that will reroute requests outside the domain back to it (as it will produce 403 otherwise)
+Description: Two edge lambdas; first will reroute requests correctly, the other adds headers to responses for security
 
 Parameters:
   Project:
@@ -13,37 +13,121 @@ Parameters:
       - production
 
 Resources:
-  SPAEdgeLambda:
+  URLRewriterLambda:
     Type: AWS::Lambda::Function
     Properties:
       Handler: 'index.handler'
       Role:
         Fn::GetAtt:
-          - 'SPAEdgeLambdaRole'
+          - 'EdgeLambdaRole'
           - 'Arn'
       Code:
         ZipFile: |
-          'use strict';
-          const path = require('path');
-          exports.handler = (evt, context, callback) => {
-              const { request } = evt.Records[0].cf
-                  if (!path.extname(request.uri)) {
-                    console.log('Rewrite URI [' + request.uri + '] to [/index.html]');
-                    request.uri = '/index.html';
-                  }
-              callback(null, request);
+          exports.handler = (event, context, callback) => {
+            const request = event.Records[0].cf.request;
+            const uri = request.uri;
+
+            if (uri.endsWith('/')) {
+              request.uri += 'index.html';
+            } else if (!uri.includes('.')) {
+              request.uri += '/index.html';
+            }
+
+            callback(null, request);
           };
       Runtime: 'nodejs8.10'
       Timeout: '25'
       TracingConfig:
         Mode: 'Active'
 
-  SPAEdgeLambdaVersion3:
+  OrigRespLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      Handler: 'index.handler'
+      Role:
+        Fn::GetAtt:
+          - 'EdgeLambdaRole'
+          - 'Arn'
+      Code:
+        ZipFile: |
+          exports.handler = (event, context, callback) => {
+            const request = event.Records[0].cf.request;
+            const response = event.Records[0].cf.response;
+            const headers = response.headers;
+
+            if (request.uri.startsWith('/static/')) {
+              headers['cache-control'] = [
+                {
+                  key: 'Cache-Control',
+                  value: 'public, max-age=31536000, immutable'
+                }
+              ];
+            } else {
+              headers['cache-control'] = [
+                {
+                  key: 'Cache-Control',
+                  value: 'public, max-age=0, must-revalidate'
+                }
+              ];
+            }
+
+            [
+              {
+                key: 'Strict-Transport-Security',
+                value: 'max-age=31536000; includeSubdomains; preload'
+              },
+              {
+                key: 'X-Content-Type-Options',
+                value: 'nosniff'
+              },
+              {
+                key: 'X-Permitted-Cross-Domain-Policies',
+                value: 'none'
+              },
+              {
+                key: 'Referrer-Policy',
+                value: 'no-referrer'
+              },
+              {
+                key: 'X-Frame-Options',
+                value: 'deny'
+              },
+              {
+                key: 'X-XSS-Protection',
+                value: '1; mode=block'
+              },
+              {
+                key: 'Content-Security-Policy',
+                value:
+                  "default-src 'self' ; script-src 'self' 'unsafe-inline' " +
+                  "https://disqus.com https://*.disqus.com https://*.disquscdn.com; " +
+                  "manifest-src 'self' ; img-src 'self' data: " +
+                  "https://disqus.com https://*.disqus.com https://*.disquscdn.com; " +
+                  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://*.disquscdn.com; " +
+                  "font-src 'self' https://fonts.gstatic.com data:; " +
+                  "frame-src 'self' https://disqus.com; " +
+                  "upgrade-insecure-requests; block-all-mixed-content; "
+              }
+            ].forEach(h => (headers[h.key.toLowerCase()] = [h]));
+
+            callback(null, response);
+          };
+      Runtime: 'nodejs8.10'
+      Timeout: '25'
+      TracingConfig:
+        Mode: 'Active'
+  
+  URLRewriterLambdaVersion3:
     Type: AWS::Lambda::Version
     Properties:
       FunctionName:
-        Ref: 'SPAEdgeLambda'
-  SPAEdgeLambdaRole:
+        Ref: 'URLRewriterLambda'
+  OrigRespLambdaVersion3:
+    Type: AWS::Lambda::Version
+    Properties:
+      FunctionName:
+        Ref: 'OrigRespLambda'
+  EdgeLambdaRole:
       Type: AWS::IAM::Role
       Properties:
         AssumeRolePolicyDocument:
@@ -73,13 +157,23 @@ Resources:
                   Effect: Allow
                   Resource: '*'
 Outputs:
-  LambdaArn:
-    Description: Arn of the edge lambda
-    Value: !GetAtt SPAEdgeLambda.Arn
+  URLRewriterLambdaArn:
+    Description: Arn of the URL Rewriter edge lambda
+    Value: !GetAtt URLRewriterLambda.Arn
     Export:
-      Name: !Sub ${AWS::StackName}-Lambda-Arn
-  LambdaVersion:
-    Description: Version of the edge lambda
-    Value: !GetAtt SPAEdgeLambdaVersion3.Version
+      Name: !Sub ${AWS::StackName}-URLRewriter-Lambda-Arn
+  OrigRespLambdaArn:
+    Description: Arn of the Origin Response edge lambda
+    Value: !GetAtt OrigRespLambda.Arn
     Export:
-      Name: !Sub ${AWS::StackName}-Lambda-Version
+      Name: !Sub ${AWS::StackName}-Origin-Response-Lambda-Arn
+  URLRewriterLambdaVersion:
+    Description: Version of the URL Rewriter edge lambda
+    Value: !GetAtt URLRewriterLambdaVersion3.Version
+    Export:
+      Name: !Sub ${AWS::StackName}-URLRewriter-Lambda-Version
+  OrigRespLambdaVersion:
+    Description: Version of the Origin Response edge lambda
+    Value: !GetAtt OrigRespLambdaVersion3.Version
+    Export:
+      Name: !Sub ${AWS::StackName}-Origin-Response-Lambda-Version
