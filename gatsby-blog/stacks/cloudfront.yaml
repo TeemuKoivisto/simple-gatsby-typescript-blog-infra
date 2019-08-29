@@ -12,7 +12,7 @@ Parameters:
       - staging
       - production
   Domain:
-    Description: Domain of the app
+    Description: Domain of the website
     Type: String
   DNSStackName:
     Description: The DNS stack (dns.yaml), full name similar to eg. gatsby-blog-staging-dns
@@ -24,33 +24,32 @@ Parameters:
     Description: Certificate arn for cloudfront distribution (needs to be issued in us-east-1 region)
     Type: String
   EdgeLambdaArn:
-    Description: Arn of the edge lamba that runs in us-east-1. This does url rewrites to SPA
+    Description: Arn of the edge lamba that runs in us-east-1. This will rewrite URLs outside your root to correct s3 URL (it's complicated :D)
     Type: String
   EdgeLambdaVersion:
-    Description: Version of the edge lambda that does url rewrites to SPA
+    Description: Version of the edge lambda
     Type: Number
 
 Resources:
   Distribution:
-    Type: AWS::CloudFront::Distribution
+    Type: 'AWS::CloudFront::Distribution'
     Properties:
       DistributionConfig:
         Enabled: true
-        Comment: !Sub CF distribution for ${Domain} ${Environment}
+        Comment: !Sub ${Environment} CloudFront distribution for ${Domain} 
         PriceClass: PriceClass_100
         ViewerCertificate:
           AcmCertificateArn: !Ref AcmCertArn
           SslSupportMethod: sni-only
         Origins:
-
           - Id: WebsiteStaticAssets
             DomainName: !Ref BucketStaticDomainName
-            OriginPath: /*
+            OriginPath: '*'
             CustomOriginConfig:
               OriginProtocolPolicy: http-only
 
         Aliases:
-          - !Sub ${Environment}.${Domain}
+          - !Ref Domain
         DefaultCacheBehavior:
           TargetOriginId: WebsiteStaticAssets
           AllowedMethods:
@@ -66,13 +65,9 @@ Resources:
           DefaultTTL: 120
           LambdaFunctionAssociations:
             - EventType: 'origin-request'
-              LambdaFunctionARN: !Join
-                - ':'
-                - - !Ref EdgeLambdaArn
-                  - !Ref EdgeLambdaVersion
-                  - !Ref 'AWS::NoValue'
+              LambdaFunctionARN: !Sub "${EdgeLambdaArn}:${EdgeLambdaVersion}"
   PublicDNS:
-    Type: AWS::Route53::RecordSet
+    Type: 'AWS::Route53::RecordSet'
     Properties:
       HostedZoneId:
         Fn::ImportValue:
