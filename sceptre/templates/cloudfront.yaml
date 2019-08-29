@@ -1,0 +1,94 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: CF distribution with the Gatsby S3 bucket as origin and the URLRewriter & OrigResponse edge-lambdas
+
+Parameters:
+  Project:
+    Description: Name of the project
+    Type: String
+  Environment:
+    Description: Environment where the stack is launched
+    Type: String
+    AllowedValues:
+      - dev
+      - prod
+  Domain:
+    Description: Domain of the website
+    Type: String
+  HostedZoneId:
+    Description: The id of the HostedZone that is the domain in front of this CF distribution
+    Type: String
+  StaticBucketDomainName:
+    Description: Bucket domain name eg snowflake-app-production-staticbucket-11blwnizvax5k.s3.amazonaws.com
+    Type: String
+  AcmCertArn:
+    Description: ARN of the ACM Certificate for the CF distribution (needs to be issued in us-east-1 region)
+    Type: String
+  CloudFrontOriginAccessIdentityId:
+    Description: CloudFront access identity id for restricting bucket access to only this CF distribution
+    Type: String
+  URLRewriterLambdaArn:
+    Description: ARN of the URL rewriter edge lambda for correct redirecting to the Gatsby pages
+    Type: String
+  OrigRespLambdaArn:
+    Description: ARN of the Origin Response edge lambda for added security
+    Type: String
+  URLRewriterLambdaVersion:
+    Description: Version of the URL rewriter edge lambda
+    Type: Number
+  OrigRespLambdaVersion:
+    Description: Version of the Origin Response edge lambda
+    Type: Number
+
+Resources:
+  Distribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Aliases:
+          - !Ref Domain
+        Comment: !Sub ${Project}-${Environment}-distribution
+        Enabled: true
+        PriceClass: PriceClass_100
+        Logging:
+          Bucket: !Ref StaticBucketDomainName
+          IncludeCookies: false
+          Prefix: !Sub logs/cloudfront/${Environment}/${Project}
+        ViewerCertificate:
+          SslSupportMethod: sni-only
+          AcmCertificateArn: !Ref AcmCertArn
+        Origins:
+          -
+            Id: StaticStaticAssets
+            DomainName: !Ref StaticBucketDomainName
+            OriginPath: ''
+            S3OriginConfig:
+              OriginAccessIdentity: !Sub origin-access-identity/cloudfront/${CloudFrontOriginAccessIdentityId}
+        DefaultCacheBehavior:
+          TargetOriginId: StaticStaticAssets
+          AllowedMethods:
+            - GET
+            - HEAD
+            - OPTIONS
+          ForwardedValues:
+            QueryString: false
+            Cookies:
+              Forward: none
+          Compress: true
+          ViewerProtocolPolicy: redirect-to-https
+          DefaultTTL: 120
+          LambdaFunctionAssociations:
+            - EventType: origin-request
+              LambdaFunctionARN: !Sub ${URLRewriterLambdaArn}:${URLRewriterLambdaVersion}
+            - EventType: origin-response
+              LambdaFunctionARN: !Sub "${OrigRespLambdaArn}:${OrigRespLambdaVersion}"
+
+  # PublicDNS:
+  #   Type: AWS::Route53::RecordSet
+  #   Properties:
+  #     HostedZoneId: !Ref HostedZoneId
+  #     Comment: !Sub ${Domain} ${Project}-${Environment} public URL
+  #     Name: !Ref Domain
+  #     Type: CNAME
+  #     TTL: 300
+  #     ResourceRecords:
+  #       - !GetAtt Distribution.DomainName

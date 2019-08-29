@@ -1,0 +1,178 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: Edge lambda for rewriting URLs for the React frontend
+
+Parameters:
+  Project:
+    Description: Name of the project
+    Type: String
+  Environment:
+    Description: Environment where the stack is launched
+    Type: String
+    AllowedValues:
+      - dev
+      - prod
+
+Resources:
+  URLRewriterLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub ${Project}-${Environment}-urlrewriter-egde-lambda
+      Handler: index.handler
+      Role: !GetAtt EdgeLambdaRole.Arn
+      Code:
+        ZipFile: |
+          const path = require('path');
+          exports.handler = (event, context, callback) => {
+            const { request } = event.Records[0].cf;
+            const { uri } = request;
+            if (uri.endsWith('/')) {
+              request.uri += 'index.html';
+            } else if (!uri.includes('.')) {
+              request.uri += '/index.html';
+            }
+            callback(null, request);
+          };
+      Runtime: 'nodejs8.10'
+      Timeout: 25
+      TracingConfig:
+        Mode: 'Active'
+
+  OrigRespLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      Handler: index.handler
+      FunctionName: !Sub ${Project}-${Environment}-origresp-egde-lambda
+      Role: !GetAtt EdgeLambdaRole.Arn
+      Code:
+        ZipFile: |
+          exports.handler = (event, context, callback) => {
+            const request = event.Records[0].cf.request;
+            const response = event.Records[0].cf.response;
+            const headers = response.headers;
+
+            if (request.uri.startsWith('/static/')) {
+              headers['cache-control'] = [
+                {
+                  key: 'Cache-Control',
+                  value: 'public, max-age=31536000, immutable'
+                }
+              ];
+            } else {
+              headers['cache-control'] = [
+                {
+                  key: 'Cache-Control',
+                  value: 'public, max-age=0, must-revalidate'
+                }
+              ];
+            }
+
+            [
+              {
+                key: 'Strict-Transport-Security',
+                value: 'max-age=31536000; includeSubdomains; preload'
+              },
+              {
+                key: 'X-Content-Type-Options',
+                value: 'nosniff'
+              },
+              {
+                key: 'X-Permitted-Cross-Domain-Policies',
+                value: 'none'
+              },
+              {
+                key: 'Referrer-Policy',
+                value: 'no-referrer'
+              },
+              {
+                key: 'X-Frame-Options',
+                value: 'deny'
+              },
+              {
+                key: 'X-XSS-Protection',
+                value: '1; mode=block'
+              },
+              {
+                // https://developers.google.com/tag-manager/web/csp
+                key: 'Content-Security-Policy',
+                value:
+                  "default-src 'self' ; script-src 'self' 'unsafe-inline' " +
+                  "https://disqus.com https://*.disqus.com https://*.disquscdn.com " +
+                  "https://www.googletagmanager.com " +
+                  "https://www.google-analytics.com https://ssl.google-analytics.com; " +
+                  "manifest-src 'self' ; img-src 'self' data: " +
+                  "https://disqus.com https://*.disqus.com https://*.disquscdn.com " +
+                  "http://www.googletagmanager.com https://www.google-analytics.com ;" +
+                  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://*.disquscdn.com ; " +
+                  "font-src 'self' https://fonts.gstatic.com data: ; " +
+                  "frame-src 'self' https://disqus.com; " +
+                  "connect-src: https://www.google-analytics.com ;" +
+                  "upgrade-insecure-requests; block-all-mixed-content; "
+              }
+            ].forEach(h => (headers[h.key.toLowerCase()] = [h]));
+
+            callback(null, response);
+          };
+      Runtime: 'nodejs8.10'
+      Timeout: 25
+      TracingConfig:
+        Mode: 'Active'
+
+  URLRewriterLambdaVersion:
+    Type: AWS::Lambda::Version
+    Properties:
+      FunctionName: !Ref URLRewriterLambda
+  OrigRespLambdaVersion:
+    Type: AWS::Lambda::Version
+    Properties:
+      FunctionName: !Ref OrigRespLambda
+
+  EdgeLambdaRole:
+      Type: AWS::IAM::Role
+      Properties:
+        AssumeRolePolicyDocument:
+          Version: 2012-10-17
+          Statement:
+            - Action: sts:AssumeRole
+              Principal:
+                Service:
+                  - lambda.amazonaws.com
+                  - edgelambda.amazonaws.com
+                  - replicator.lambda.amazonaws.com
+              Effect: Allow
+        Policies:
+          - PolicyName: EdgeLambdaPolicy
+            PolicyDocument:
+              Version: 2012-10-17
+              Statement:
+                - Action:
+                    - xray:PutTraceSegments
+                    - xray:PutTelemetryRecords
+                    - lambda:GetFunction
+                    - lambda:EnableReplication*
+                    - lambda:InvokeFunction
+                    - logs:CreateLogGroup
+                    - logs:CreateLogStream
+                    - logs:PutLogEvents
+                  Effect: Allow
+                  Resource: '*'
+Outputs:
+  URLRewriterLambdaArn:
+    Description: ARN of the URL Rewriter edge lambda
+    Value: !GetAtt URLRewriterLambda.Arn
+    Export:
+      Name: !Sub ${AWS::StackName}-URLRewriter-Lambda-Arn
+  OrigRespLambdaArn:
+    Description: ARN of the Origin Response edge lambda
+    Value: !GetAtt OrigRespLambda.Arn
+    Export:
+      Name: !Sub ${AWS::StackName}-Origin-Response-Lambda-Arn
+  URLRewriterLambdaVersion:
+    Description: Version of the URL Rewriter edge lambda
+    Value: !GetAtt URLRewriterLambdaVersion.Version
+    Export:
+      Name: !Sub ${AWS::StackName}-URLRewriter-Lambda-Version
+  OrigRespLambdaVersion:
+    Description: Version of the Origin Response edge lambda
+    Value: !GetAtt OrigRespLambdaVersion.Version
+    Export:
+      Name: !Sub ${AWS::StackName}-Origin-Response-Lambda-Version

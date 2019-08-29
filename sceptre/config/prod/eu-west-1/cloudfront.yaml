@@ -1,0 +1,16 @@
+template_path: cloudfront.yaml
+parameters:
+  Environment: {{ command_path.0 }}
+  Project: {{ project_code }}
+  Domain: teemukoivisto.xyz
+  AcmCertArn: arn:aws:acm:us-east-1:626386600593:certificate/b62e05d1-af1e-4c7d-8672-cfa0b2753b60
+  HostedZoneId: 'Z1BAM1TK3GCPMM' # !stack_output prod/eu-west-1/dns.yaml::HostedZoneId
+  StaticBucketDomainName: !stack_output prod/eu-west-1/static-bucket.yaml::StaticBucketDomainName
+  CloudFrontOriginAccessIdentityId: !stack_output prod/eu-west-1/static-bucket.yaml::CloudFrontOriginAccessIdentityId
+  URLRewriterLambdaArn: !stack_output prod/us-east-1/edge-lambda.yaml::URLRewriterLambdaArn
+  OrigRespLambdaArn: !stack_output prod/us-east-1/edge-lambda.yaml::OrigRespLambdaArn
+  URLRewriterLambdaVersion: '1' # NOTE: you have to manually publish the new edge lambda version from the console
+  OrigRespLambdaVersion: '6' # after deploying changes to the edge lambda
+stack_tags:
+  Environment: {{ command_path.0 }}
+  Project: {{ project_code }}
