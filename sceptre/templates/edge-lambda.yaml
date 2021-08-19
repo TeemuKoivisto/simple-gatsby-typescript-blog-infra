@@ -105,7 +105,7 @@ Resources:
                   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://*.disquscdn.com ; " +
                   "font-src 'self' https://fonts.gstatic.com data: ; " +
                   "frame-src 'self' https://disqus.com; " +
-                  "connect-src: https://www.google-analytics.com ;" +
+                  "connect-src 'self' https://www.google-analytics.com ;" +
                   "upgrade-insecure-requests; block-all-mixed-content; "
               }
             ].forEach(h => (headers[h.key.toLowerCase()] = [h]));

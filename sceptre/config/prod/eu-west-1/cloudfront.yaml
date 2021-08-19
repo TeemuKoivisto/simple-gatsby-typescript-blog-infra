@@ -9,8 +9,10 @@ parameters:
   CloudFrontOriginAccessIdentityId: !stack_output prod/eu-west-1/static-bucket.yaml::CloudFrontOriginAccessIdentityId
   URLRewriterLambdaArn: !stack_output prod/us-east-1/edge-lambda.yaml::URLRewriterLambdaArn
   OrigRespLambdaArn: !stack_output prod/us-east-1/edge-lambda.yaml::OrigRespLambdaArn
-  URLRewriterLambdaVersion: '1' # NOTE: you have to manually publish the new edge lambda version from the console
-  OrigRespLambdaVersion: '6' # after deploying changes to the edge lambda
+  # NOTE: you have to manually publish the new edge lambda version from the console
+  # after deploying changes to the edge lambda
+  URLRewriterLambdaVersion: '1'
+  OrigRespLambdaVersion: '9'
 stack_tags:
   Environment: {{ command_path.0 }}
   Project: {{ project_code }}
