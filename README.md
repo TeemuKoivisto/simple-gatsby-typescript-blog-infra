@@ -8,7 +8,7 @@ Created using these tutorials, code:
 
 ## Requirements
 
-Requires Python >= 3.5(? not sure), aws-cli and sceptre installed globally: `pip install aws-cli sceptre -U` (or `python3 -m pip install aws-cli sceptre -U` if you have different default Python eg. macOS).
+Requires Python >= 3.5, aws-cli and sceptre installed globally: `pip install aws-cli sceptre -U` (or `python3 -m pip install aws-cli sceptre -U` if you have different default Python eg. macOS).
 
 For some reason I couldn't install Sceptre globally with pip so I instead used Brew: `brew install sceptre`.
 
@@ -16,13 +16,9 @@ For some reason I couldn't install Sceptre globally with pip so I instead used B
 
 You should have an AWS account with *admin* permissions. Yes, scary I know but eh...
 
-Then use that AWS profile locally, I've made instructions here: xxx
-
 Using sceptre however is super simple, for creating the stack you'll need only to launch it with:
 1. `sceptre launch-env <env>` where env could be `dev`.
 2. Wait until the stack creation finishes.
-
-xxx give github repo as parameter? or the s3 bucket where it has been pushed ...
 
 ## gatsby-blog-us-east
 
@@ -48,7 +44,7 @@ The default resources that are created to the eu-west-1 region.
 
 ### Order of creating the stacks
 
-0. Buy your domain. Here's my instructions xxxlink. Add either your domain or a new subdomain name to `gatsby-blog/config/staging/dns.yaml`.
+0. Buy your domain. Add either your domain or a new subdomain name to `gatsby-blog/config/staging/dns.yaml`.
 0.1 Create your goddamn buckit with the Gatsby assets???
 1. Launch dns: `cd gatsby-blog && sceptre launch-stack staging dns`.
 2. Go to AWS console, add your subdomain and SSL certificate manually [instructions](https://github.com/TeemuKoivisto/-simple-gatsby-typescript-blog-infra/tree/master/gatsby-blog/manual-stacks).
@@ -60,21 +56,6 @@ The default resources that are created to the eu-west-1 region.
 NOTE: `sceptre delete-env` (or `delete-stack`) won't work for some of the resources...
 At least:
 * HostedZones (which actually is a really good thing)
-
-cloudfront todo
-the fuging cname staging.staging
-redirect http to https
-TLSv1.1_2016
-default root object?
-origin domain path = s3 origin (NOT s3.static-website)
-origin path = null ?
-
-jotain lisää
-node äppi ecs + xray + mitä lie monitorointeja
-serverless joku juttu
-*ei* cognitoa, joku dynamo homma sit?
-cloudtrail
-
 
 ## Sceptre gotchas
 
